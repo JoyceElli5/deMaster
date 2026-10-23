@@ -1,0 +1,278 @@
+// app.js – connects the buttons on the page to the camera, OCR and analyzer.
+
+const $ = id => document.getElementById(id);
+
+const els = {
+  examTitle: $("exam-title"),
+  answerKey: $("answer-key"),
+  saveKey: $("save-key"),
+  keyStatus: $("key-status"),
+  studentName: $("student-name"),
+  video: $("video"),
+  photo: $("photo"),
+  placeholder: $("camera-placeholder"),
+  startCamera: $("start-camera"),
+  snap: $("snap"),
+  retake: $("retake"),
+  upload: $("upload"),
+  runOcr: $("run-ocr"),
+  progress: document.querySelector(".progress"),
+  progressBar: $("progress-bar"),
+  ocrStatus: $("ocr-status"),
+  ocrText: $("ocr-text"),
+  runGrade: $("run-grade"),
+  result: $("result"),
+  score: $("score"),
+  percent: $("percent"),
+  grade: $("grade"),
+  resultRows: $("result-rows"),
+  saveResult: $("save-result"),
+  recordRows: $("record-rows"),
+  exportCsv: $("export-csv"),
+  clearRecords: $("clear-records")
+};
+
+let currentResult = null;
+
+// ---------- Saving data in the browser ----------
+
+const Store = {
+  get(name, fallback) {
+    try {
+      return JSON.parse(localStorage.getItem("demaster-" + name)) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  },
+  set(name, value) {
+    try {
+      localStorage.setItem("demaster-" + name, JSON.stringify(value));
+    } catch {
+      // Storage may be blocked (e.g. private mode); the app still works without it.
+    }
+  }
+};
+
+// ---------- Step 1: Answer key ----------
+
+function loadKey() {
+  const saved = Store.get("key", null);
+  if (saved) {
+    els.examTitle.value = saved.title;
+    els.answerKey.value = saved.text;
+    showKeyCount();
+  }
+}
+
+function showKeyCount() {
+  const key = Analyzer.parseKey(els.answerKey.value);
+  const count = Object.keys(key).length;
+  const marks = Object.values(key).reduce((sum, k) => sum + k.marks, 0);
+  els.keyStatus.textContent = count
+    ? `${count} questions, ${marks} marks`
+    : "No questions found yet";
+}
+
+els.saveKey.addEventListener("click", () => {
+  Store.set("key", { title: els.examTitle.value.trim(), text: els.answerKey.value });
+  showKeyCount();
+  els.keyStatus.textContent += " – saved ✓";
+});
+els.answerKey.addEventListener("input", showKeyCount);
+
+// ---------- Step 2: Photo capture ----------
+
+function showPhoto() {
+  Camera.stop();
+  els.video.hidden = true;
+  els.photo.hidden = false;
+  els.placeholder.hidden = true;
+  els.snap.disabled = true;
+  els.retake.hidden = false;
+  els.runOcr.disabled = false;
+}
+
+els.startCamera.addEventListener("click", async () => {
+  try {
+    await Camera.start(els.video);
+    els.video.hidden = false;
+    els.photo.hidden = true;
+    els.placeholder.hidden = true;
+    els.snap.disabled = false;
+    els.retake.hidden = true;
+  } catch (err) {
+    alert("Could not open the camera: " + err.message +
+      "\n\nTip: allow camera access, or use 'Upload photo'.");
+  }
+});
+
+els.snap.addEventListener("click", () => {
+  Camera.snap(els.video, els.photo);
+  showPhoto();
+});
+
+els.retake.addEventListener("click", () => els.startCamera.click());
+
+els.upload.addEventListener("change", async () => {
+  const file = els.upload.files[0];
+  if (!file) return;
+  try {
+    await Camera.loadFile(file, els.photo);
+    showPhoto();
+  } catch (err) {
+    alert(err.message);
+  }
+  els.upload.value = "";
+});
+
+// ---------- Step 3: OCR ----------
+
+els.runOcr.addEventListener("click", async () => {
+  els.runOcr.disabled = true;
+  els.progress.hidden = false;
+  els.progressBar.style.width = "0%";
+  els.ocrStatus.textContent = "Reading the sheet… (the first time takes longer)";
+
+  try {
+    const { text, confidence } = await OCR.read(els.photo, p => {
+      els.progressBar.style.width = Math.round(p * 100) + "%";
+    });
+    els.ocrText.value = text;
+    els.ocrStatus.textContent = text
+      ? `Done. The app is ${confidence}% sure it read the text correctly.`
+      : "No text found. Try a clearer, brighter photo.";
+  } catch (err) {
+    els.ocrStatus.textContent = "Something went wrong: " + err.message;
+  } finally {
+    els.runOcr.disabled = false;
+    els.progress.hidden = true;
+  }
+});
+
+// ---------- Step 4: Mark & grade ----------
+
+const LABELS = { correct: "✓ Correct", wrong: "✗ Wrong", check: "? Check" };
+
+function renderResult() {
+  const { rows, total } = currentResult;
+  const earned = Analyzer.score(rows);
+  const percent = total ? Math.round((earned / total) * 100) : 0;
+  const { grade, remark } = Analyzer.letterGrade(percent);
+
+  Object.assign(currentResult, { earned, percent, grade, remark });
+
+  els.score.textContent = `${earned} / ${total}`;
+  els.percent.textContent = `${percent}%`;
+  els.grade.innerHTML = `Grade ${grade}<br><small>${remark}</small>`;
+
+  els.resultRows.innerHTML = "";
+  rows.forEach((row, i) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.q}</td>
+      <td>${escapeHtml(row.student) || '<span class="muted">(no answer)</span>'}</td>
+      <td>${escapeHtml(row.correct)}</td>
+      <td>${row.marks}</td>
+      <td><button class="tag ${row.status}" data-index="${i}">${LABELS[row.status]}</button></td>`;
+    els.resultRows.appendChild(tr);
+  });
+  els.result.hidden = false;
+}
+
+// Teacher can tap a result to switch it between correct and wrong.
+els.resultRows.addEventListener("click", e => {
+  const button = e.target.closest(".tag");
+  if (!button) return;
+  const row = currentResult.rows[button.dataset.index];
+  row.status = row.status === "correct" ? "wrong" : "correct";
+  renderResult();
+});
+
+els.runGrade.addEventListener("click", () => {
+  if (!Object.keys(Analyzer.parseKey(els.answerKey.value)).length) {
+    alert("Type the answer key in step 1 first.");
+    return;
+  }
+  if (!els.ocrText.value.trim()) {
+    alert("There is no text to mark. Read a sheet in step 3 (or type the answers in).");
+    return;
+  }
+  currentResult = Analyzer.grade(els.answerKey.value, els.ocrText.value);
+  renderResult();
+});
+
+// ---------- Records ----------
+
+function renderRecords() {
+  const records = Store.get("records", []);
+  els.recordRows.innerHTML = records.length ? "" :
+    '<tr><td colspan="5" class="muted">No saved results yet.</td></tr>';
+  records.forEach((r, i) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(r.student)}</td>
+      <td>${escapeHtml(r.exam)}</td>
+      <td>${r.earned}/${r.total} (${r.percent}%)</td>
+      <td>${r.grade}</td>
+      <td><button class="link-btn" data-index="${i}" title="Delete">✕</button></td>`;
+    els.recordRows.appendChild(tr);
+  });
+}
+
+els.saveResult.addEventListener("click", () => {
+  if (!currentResult) return;
+  const records = Store.get("records", []);
+  records.push({
+    student: els.studentName.value.trim() || "Unnamed student",
+    exam: els.examTitle.value.trim() || "Untitled exam",
+    earned: currentResult.earned,
+    total: currentResult.total,
+    percent: currentResult.percent,
+    grade: currentResult.grade,
+    remark: currentResult.remark,
+    date: new Date().toISOString().slice(0, 10)
+  });
+  Store.set("records", records);
+  renderRecords();
+  els.saveResult.textContent = "Saved ✓";
+  setTimeout(() => (els.saveResult.textContent = "Save to records"), 1500);
+});
+
+els.recordRows.addEventListener("click", e => {
+  const button = e.target.closest(".link-btn");
+  if (!button) return;
+  const records = Store.get("records", []);
+  records.splice(button.dataset.index, 1);
+  Store.set("records", records);
+  renderRecords();
+});
+
+els.clearRecords.addEventListener("click", () => {
+  if (confirm("Delete all saved results?")) {
+    Store.set("records", []);
+    renderRecords();
+  }
+});
+
+els.exportCsv.addEventListener("click", () => {
+  const records = Store.get("records", []);
+  if (!records.length) return alert("No records to download.");
+  const header = ["Student", "Exam", "Score", "Total", "Percent", "Grade", "Remark", "Date"];
+  const lines = records.map(r =>
+    [r.student, r.exam, r.earned, r.total, r.percent, r.grade, r.remark, r.date]
+      .map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+  const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "exam-results.csv";
+  link.click();
+  URL.revokeObjectURL(link.href);
+});
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+loadKey();
+renderRecords();

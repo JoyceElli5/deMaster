@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>deMaster – Exam Marker</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Tesseract.js does the Optical Character Recognition (reading text from a photo) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>deMaster</h1>
+    <p>Snap an exam sheet. Read it. Mark it.</p>
+  </header>
+
+  <main>
+    <!-- STEP 1: ANSWER KEY -->
+    <section class="card" id="key-section">
+      <h2><span class="step">1</span> Answer key</h2>
+      <p class="hint">
+        One answer per line, like <code>1. B</code> or <code>3. photosynthesis</code>.
+        Add marks in brackets, e.g. <code>5. Accra [2]</code> (default is 1 mark).
+        If more than one answer is accepted, separate them with <code>|</code>, e.g. <code>6. half | 0.5</code>.
+      </p>
+      <label for="exam-title">Exam title</label>
+      <input id="exam-title" type="text" placeholder="e.g. JHS 2 Science – Mid-term">
+      <label for="answer-key">Answers</label>
+      <textarea id="answer-key" rows="8" placeholder="1. B&#10;2. D&#10;3. photosynthesis&#10;4. 12&#10;5. Accra [2]"></textarea>
+      <div class="row">
+        <button id="save-key" class="btn">Save key</button>
+        <span id="key-status" class="muted"></span>
+      </div>
+    </section>
+
+    <!-- STEP 2: PHOTO CAPTURE -->
+    <section class="card" id="capture-section">
+      <h2><span class="step">2</span> Capture the sheet</h2>
+      <label for="student-name">Student name</label>
+      <input id="student-name" type="text" placeholder="e.g. Ama Mensah">
+
+      <div class="camera-box">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="photo" hidden></canvas>
+        <div id="camera-placeholder" class="placeholder">Camera is off</div>
+      </div>
+
+      <div class="row wrap">
+        <button id="start-camera" class="btn">Start camera</button>
+        <button id="snap" class="btn primary" disabled>Take photo</button>
+        <button id="retake" class="btn" hidden>Retake</button>
+        <label class="btn file-btn">
+          Upload photo
+          <input id="upload" type="file" accept="image/*" capture="environment" hidden>
+        </label>
+      </div>
+    </section>
+
+    <!-- STEP 3: OCR -->
+    <section class="card" id="ocr-section">
+      <h2><span class="step">3</span> Read the text (OCR)</h2>
+      <button id="run-ocr" class="btn primary" disabled>Read sheet</button>
+      <div class="progress" hidden><div id="progress-bar"></div></div>
+      <p id="ocr-status" class="muted"></p>
+      <label for="ocr-text">Text found on the sheet <span class="muted">(fix any mistakes before marking)</span></label>
+      <textarea id="ocr-text" rows="8" placeholder="The text read from the photo will appear here…"></textarea>
+    </section>
+
+    <!-- STEP 4: ANALYZE & GRADE -->
+    <section class="card" id="grade-section">
+      <h2><span class="step">4</span> Mark &amp; grade</h2>
+      <button id="run-grade" class="btn primary">Mark sheet</button>
+
+      <div id="result" hidden>
+        <div class="score-box">
+          <div>
+            <div class="score" id="score"></div>
+            <div class="muted" id="percent"></div>
+          </div>
+          <div class="grade-badge" id="grade"></div>
+        </div>
+        <p class="hint">Tap a result to change it if the app got it wrong.</p>
+        <table>
+          <thead><tr><th>Q</th><th>Student</th><th>Correct</th><th>Marks</th><th>Result</th></tr></thead>
+          <tbody id="result-rows"></tbody>
+        </table>
+        <div class="row">
+          <button id="save-result" class="btn">Save to records</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RECORDS -->
+    <section class="card" id="records-section">
+      <h2>Records</h2>
+      <table>
+        <thead><tr><th>Student</th><th>Exam</th><th>Score</th><th>Grade</th><th></th></tr></thead>
+        <tbody id="record-rows"></tbody>
+      </table>
+      <div class="row">
+        <button id="export-csv" class="btn">Download CSV</button>
+        <button id="clear-records" class="btn danger">Clear all</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/camera.js"></script>
+  <script src="js/ocr.js"></script>
+  <script src="js/analyzer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
