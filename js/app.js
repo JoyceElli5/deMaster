@@ -20,7 +20,12 @@ const els = {
   progressBar: $("progress-bar"),
   ocrStatus: $("ocr-status"),
   ocrText: $("ocr-text"),
+  groqKey: $("groq-key"),
+  groqModel: $("groq-model"),
+  saveAi: $("save-ai"),
+  aiStatus: $("ai-status"),
   runGrade: $("run-grade"),
+  gradeStatus: $("grade-status"),
   result: $("result"),
   score: $("score"),
   percent: $("percent"),
@@ -170,9 +175,10 @@ function renderResult() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${row.q}</td>
-      <td>${escapeHtml(row.student) || '<span class="muted">(no answer)</span>'}</td>
+      <td>${escapeHtml(row.student) || '<span class="muted">(no answer)</span>'}
+        ${row.feedback ? `<span class="feedback">${escapeHtml(row.feedback)}</span>` : ""}</td>
       <td>${escapeHtml(row.correct)}</td>
-      <td>${row.marks}</td>
+      <td>${row.awarded ?? (row.status === "correct" ? row.marks : 0)}/${row.marks}</td>
       <td><button class="tag ${row.status}" data-index="${i}">${LABELS[row.status]}</button></td>`;
     els.resultRows.appendChild(tr);
   });
@@ -185,10 +191,26 @@ els.resultRows.addEventListener("click", e => {
   if (!button) return;
   const row = currentResult.rows[button.dataset.index];
   row.status = row.status === "correct" ? "wrong" : "correct";
+  row.awarded = row.status === "correct" ? row.marks : 0;
   renderResult();
 });
 
-els.runGrade.addEventListener("click", () => {
+// ---------- AI settings ----------
+
+function loadAiSettings() {
+  const saved = Store.get("ai", {});
+  els.groqKey.value = saved.key || "";
+  els.groqModel.value = saved.model || AI.defaultModel;
+  els.aiStatus.textContent = saved.key ? "AI marking is on" : "AI marking is off";
+}
+
+els.saveAi.addEventListener("click", () => {
+  Store.set("ai", { key: els.groqKey.value.trim(), model: els.groqModel.value.trim() });
+  loadAiSettings();
+  els.aiStatus.textContent += " – saved ✓";
+});
+
+els.runGrade.addEventListener("click", async () => {
   if (!Object.keys(Analyzer.parseKey(els.answerKey.value)).length) {
     alert("Type the answer key in step 1 first.");
     return;
@@ -197,7 +219,27 @@ els.runGrade.addEventListener("click", () => {
     alert("There is no text to mark. Read a sheet in step 3 (or type the answers in).");
     return;
   }
-  currentResult = Analyzer.grade(els.answerKey.value, els.ocrText.value);
+
+  const { key, model } = Store.get("ai", {});
+  if (!key) {
+    currentResult = Analyzer.grade(els.answerKey.value, els.ocrText.value);
+    els.gradeStatus.textContent = "Marked with built-in rules";
+    renderResult();
+    return;
+  }
+
+  els.runGrade.disabled = true;
+  els.gradeStatus.textContent = "AI is marking…";
+  try {
+    currentResult = await AI.grade(els.answerKey.value, els.ocrText.value, key, model);
+    els.gradeStatus.textContent = "Marked by AI";
+  } catch (err) {
+    // If the AI is unavailable (no internet, bad key), still mark the sheet.
+    currentResult = Analyzer.grade(els.answerKey.value, els.ocrText.value);
+    els.gradeStatus.textContent = "AI failed (" + err.message + "), marked with built-in rules";
+  } finally {
+    els.runGrade.disabled = false;
+  }
   renderResult();
 });
 
@@ -275,4 +317,5 @@ function escapeHtml(text) {
 }
 
 loadKey();
+loadAiSettings();
 renderRecords();

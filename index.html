@@ -69,7 +69,27 @@
     <!-- STEP 4: ANALYZE & GRADE -->
     <section class="card" id="grade-section">
       <h2><span class="step">4</span> Mark &amp; grade</h2>
-      <button id="run-grade" class="btn primary">Mark sheet</button>
+
+      <details id="ai-settings">
+        <summary>AI marking settings (Groq)</summary>
+        <p class="hint">
+          With a Groq API key, an AI model understands and marks each answer.
+          Without one, the app marks with its built-in rules. The key is saved on this device only.
+        </p>
+        <label for="groq-key">Groq API key</label>
+        <input id="groq-key" type="password" placeholder="gsk_…" autocomplete="off">
+        <label for="groq-model">Model</label>
+        <input id="groq-model" type="text" placeholder="openai/gpt-oss-120b">
+        <div class="row">
+          <button id="save-ai" class="btn">Save</button>
+          <span id="ai-status" class="muted"></span>
+        </div>
+      </details>
+
+      <div class="row">
+        <button id="run-grade" class="btn primary">Mark sheet</button>
+        <span id="grade-status" class="muted"></span>
+      </div>
 
       <div id="result" hidden>
         <div class="score-box">
@@ -107,6 +127,7 @@
   <script src="js/camera.js"></script>
   <script src="js/ocr.js"></script>
   <script src="js/analyzer.js"></script>
+  <script src="js/ai.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -177,8 +177,11 @@ const Analyzer = {
   },
 
   // Marks earned. "check" answers earn nothing until the teacher confirms them.
+  // AI marking can give part marks, which are stored in "awarded".
   score(rows) {
-    return rows.reduce((sum, r) => sum + (r.status === "correct" ? r.marks : 0), 0);
+    const total = rows.reduce((sum, r) =>
+      sum + (r.awarded ?? (r.status === "correct" ? r.marks : 0)), 0);
+    return Math.round(total * 100) / 100;
   },
 
   // Ghana JHS / BECE-style grading scale (1 = best, 9 = lowest).

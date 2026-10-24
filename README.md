@@ -25,6 +25,15 @@ You need internet the first time, because the OCR library loads from the web.
 4. **Mark** – the app compares each answer to the key and gives a score and grade (1–9).
    Tap a result to change it. Answers marked **? Check** might be right, so look at them yourself.
 
+## AI marking (Groq)
+
+Open **AI marking settings** in step 4 and paste a Groq API key (get one at https://console.groq.com/keys).
+The AI then reads each answer, understands it, can give part marks, and writes short feedback.
+If there is no key, or the AI can't be reached, the app marks with its built-in rules instead.
+
+The key is saved only in that browser on that device. **Never put your key in the code** –
+this repository is public, and anyone could copy it and use up your account.
+
 ## Files
 
 | File | What it does |
@@ -33,7 +42,8 @@ You need internet the first time, because the OCR library loads from the web.
 | `css/style.css` | How it looks |
 | `js/camera.js` | Photo capture |
 | `js/ocr.js` | Cleans the photo and reads the text (uses Tesseract.js) |
-| `js/analyzer.js` | Understands the answers and marks them |
+| `js/analyzer.js` | Understands the answers and marks them (built-in rules) |
+| `js/ai.js` | Marks the answers with a Groq AI model |
 | `js/app.js` | Connects the buttons to everything else |
 
 ## Tips for good results
