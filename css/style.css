@@ -192,6 +192,7 @@ td { word-break: break-word; }
   font-weight: 600;
   cursor: pointer;
   border: none;
+  white-space: nowrap;
 }
 .tag.correct { background: var(--good-bg); color: var(--good); }
 .tag.wrong { background: var(--bad-bg); color: var(--bad); }
@@ -213,4 +214,13 @@ summary { cursor: pointer; font-weight: 600; }
   color: var(--bad);
   cursor: pointer;
   font: inherit;
+}
+
+/* On phones the correct answer moves under the student's answer, so the table fits */
+.answer-inline { display: none; font-size: 0.85rem; margin-top: 2px; }
+@media (max-width: 560px) {
+  .answer-col { display: none; }
+  .answer-inline { display: block; }
+  .tag { padding: 6px 10px; }
+  .card { padding: 14px; }
 }

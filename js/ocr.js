@@ -1,8 +1,13 @@
 // ocr.js – OPTICAL CHARACTER RECOGNITION FEATURE
-// Cleans up the photo (black & white, more contrast) so letters are easier
-// to read, then uses Tesseract.js to turn the picture into text.
+// Turns the photo of the sheet into text.
+// With a Groq key, an AI vision model looks at the photo itself – it copes with
+// handwriting, tilted pages and crossed-out answers.
+// Without a key (or offline), Tesseract.js reads it on this device instead.
 
 const OCR = {
+  visionUrl: "https://api.groq.com/openai/v1/chat/completions",
+  defaultVisionModel: "qwen/qwen3.8-27b",
+
   // Make a black-and-white copy of the photo. Returns a new canvas.
   preprocess(source) {
     const canvas = document.createElement("canvas");
@@ -34,7 +39,7 @@ const OCR = {
     return canvas;
   },
 
-  // Read the text. onProgress gets a number from 0 to 1.
+  // Read the text on this device with Tesseract. onProgress gets a number from 0 to 1.
   async read(canvas, onProgress) {
     if (typeof Tesseract === "undefined") {
       throw new Error("The OCR library did not load. Check your internet connection and refresh.");
@@ -49,5 +54,60 @@ const OCR = {
       text: result.data.text.trim(),
       confidence: Math.round(result.data.confidence)
     };
-  }
+  },
+
+  // Shrink the photo and turn it into a JPEG the AI can receive.
+  toJpeg(canvas, maxSide = 1600) {
+    const scale = Math.min(1, maxSide / Math.max(canvas.width, canvas.height));
+    const small = document.createElement("canvas");
+    small.width = Math.round(canvas.width * scale);
+    small.height = Math.round(canvas.height * scale);
+    small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
+    return small.toDataURL("image/jpeg", 0.85);
+  },
+
+  // Read the sheet with an AI vision model.
+  async readWithAI(canvas, apiKey, model) {
+    const response = await fetch(this.visionUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + apiKey
+      },
+      body: JSON.stringify({
+        model: model || this.defaultVisionModel,
+        temperature: 0,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: this.visionInstructions },
+            { type: "image_url", image_url: { url: this.toJpeg(canvas) } }
+          ]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error?.message || `Groq returned error ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content.trim();
+  },
+
+  visionInstructions: `This is a photo of a student's exam sheet.
+Copy it out in this exact format, in question order:
+
+Name: <student's name, if written>
+[Q1] <the printed question, with its options and marks, if the question is on the sheet>
+1. <exactly what the student wrote for question 1>
+[Q2] <question 2>
+2. <the student's answer to question 2>
+
+Leave out a [Q] line when the question is not on the sheet (e.g. an answer-only sheet).
+Keep the student's own spelling and mistakes – do not correct or answer anything.
+If something is crossed out, write it as ~~like this~~.
+If you cannot read something, write [unclear].
+Reply with the text only.`
 };

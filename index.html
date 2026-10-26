@@ -19,6 +19,7 @@
     <section class="card" id="key-section">
       <h2><span class="step">1</span> Answer key</h2>
       <p class="hint">
+        Optional when AI is on – the AI can work out the answers from the questions on the sheet.
         One answer per line, like <code>1. B</code> or <code>3. photosynthesis</code>.
         Add marks in brackets, e.g. <code>5. Accra [2]</code> (default is 1 mark).
         If more than one answer is accepted, separate them with <code>|</code>, e.g. <code>6. half | 0.5</code>.
@@ -73,13 +74,16 @@
       <details id="ai-settings">
         <summary>AI marking settings (Groq)</summary>
         <p class="hint">
-          With a Groq API key, an AI model understands and marks each answer.
-          Without one, the app marks with its built-in rules. The key is saved on this device only.
+          With a Groq API key, AI reads the photo (including handwriting) and marks each answer.
+          Without one, the app reads with Tesseract and marks with its built-in rules.
+          The key is saved on this device only.
         </p>
         <label for="groq-key">Groq API key</label>
         <input id="groq-key" type="password" placeholder="gsk_…" autocomplete="off">
-        <label for="groq-model">Model</label>
+        <label for="groq-model">Marking model</label>
         <input id="groq-model" type="text" placeholder="openai/gpt-oss-120b">
+        <label for="groq-vision-model">Reading model <span class="muted">(must understand images)</span></label>
+        <input id="groq-vision-model" type="text" placeholder="qwen/qwen3.8-27b">
         <div class="row">
           <button id="save-ai" class="btn">Save</button>
           <span id="ai-status" class="muted"></span>
@@ -101,7 +105,7 @@
         </div>
         <p class="hint">Tap a result to change it if the app got it wrong.</p>
         <table>
-          <thead><tr><th>Q</th><th>Student</th><th>Correct</th><th>Marks</th><th>Result</th></tr></thead>
+          <thead><tr><th>Q</th><th>Student</th><th class="answer-col">Correct</th><th>Marks</th><th>Result</th></tr></thead>
           <tbody id="result-rows"></tbody>
         </table>
         <div class="row">
@@ -124,6 +128,8 @@
     </section>
   </main>
 
+  <!-- Optional local settings (your Groq key). Not in git – see js/config.example.js -->
+  <script src="js/config.local.js" onerror="this.remove()"></script>
   <script src="js/camera.js"></script>
   <script src="js/ocr.js"></script>
   <script src="js/analyzer.js"></script>

@@ -22,6 +22,7 @@ const els = {
   ocrText: $("ocr-text"),
   groqKey: $("groq-key"),
   groqModel: $("groq-model"),
+  groqVisionModel: $("groq-vision-model"),
   saveAi: $("save-ai"),
   aiStatus: $("ai-status"),
   runGrade: $("run-grade"),
@@ -136,16 +137,37 @@ els.runOcr.addEventListener("click", async () => {
   els.runOcr.disabled = true;
   els.progress.hidden = false;
   els.progressBar.style.width = "0%";
-  els.ocrStatus.textContent = "Reading the sheet… (the first time takes longer)";
+
+  const { key, visionModel } = aiSettings();
+  let aiError = null;
 
   try {
+    if (key) {
+      els.ocrStatus.textContent = "AI is reading the sheet…";
+      els.progressBar.style.width = "50%";
+      try {
+        const text = await OCR.readWithAI(els.photo, key, visionModel);
+        els.ocrText.value = text;
+        // Fill in the student's name from the sheet if the teacher hasn't typed one.
+        const name = text.match(/^\s*name\s*:\s*(.+)$/im);
+        if (name && !els.studentName.value.trim()) els.studentName.value = name[1].trim();
+        els.ocrStatus.textContent = "Read by AI. Check the text, then mark.";
+        return;
+      } catch (err) {
+        aiError = err.message;
+      }
+    }
+
+    els.ocrStatus.textContent = (aiError ? `AI could not read it (${aiError}). ` : "") +
+      "Reading on this device… (the first time takes longer)";
+    els.progressBar.style.width = "0%";
     const { text, confidence } = await OCR.read(els.photo, p => {
       els.progressBar.style.width = Math.round(p * 100) + "%";
     });
     els.ocrText.value = text;
-    els.ocrStatus.textContent = text
+    els.ocrStatus.textContent = (aiError ? `AI failed (${aiError}), read on this device. ` : "") + (text
       ? `Done. The app is ${confidence}% sure it read the text correctly.`
-      : "No text found. Try a clearer, brighter photo.";
+      : "No text found. Try a clearer, brighter photo.");
   } catch (err) {
     els.ocrStatus.textContent = "Something went wrong: " + err.message;
   } finally {
@@ -176,8 +198,9 @@ function renderResult() {
     tr.innerHTML = `
       <td>${row.q}</td>
       <td>${escapeHtml(row.student) || '<span class="muted">(no answer)</span>'}
+        <span class="answer-inline">Answer: ${escapeHtml(row.correct)}</span>
         ${row.feedback ? `<span class="feedback">${escapeHtml(row.feedback)}</span>` : ""}</td>
-      <td>${escapeHtml(row.correct)}</td>
+      <td class="answer-col">${escapeHtml(row.correct)}</td>
       <td>${row.awarded ?? (row.status === "correct" ? row.marks : 0)}/${row.marks}</td>
       <td><button class="tag ${row.status}" data-index="${i}">${LABELS[row.status]}</button></td>`;
     els.resultRows.appendChild(tr);
@@ -197,30 +220,47 @@ els.resultRows.addEventListener("click", e => {
 
 // ---------- AI settings ----------
 
-function loadAiSettings() {
+// Settings saved in this browser win; otherwise use js/config.local.js if it exists.
+function aiSettings() {
   const saved = Store.get("ai", {});
-  els.groqKey.value = saved.key || "";
-  els.groqModel.value = saved.model || AI.defaultModel;
-  els.aiStatus.textContent = saved.key ? "AI marking is on" : "AI marking is off";
+  const local = window.DEMASTER_CONFIG || {};
+  return {
+    key: saved.key || local.groqKey || "",
+    model: saved.model || local.markingModel || AI.defaultModel,
+    visionModel: saved.visionModel || local.visionModel || OCR.defaultVisionModel
+  };
+}
+
+function loadAiSettings() {
+  const { key, model, visionModel } = aiSettings();
+  els.groqKey.value = key;
+  els.groqModel.value = model;
+  els.groqVisionModel.value = visionModel;
+  els.aiStatus.textContent = key ? "AI reading and marking are on" : "AI is off";
 }
 
 els.saveAi.addEventListener("click", () => {
-  Store.set("ai", { key: els.groqKey.value.trim(), model: els.groqModel.value.trim() });
+  Store.set("ai", {
+    key: els.groqKey.value.trim(),
+    model: els.groqModel.value.trim(),
+    visionModel: els.groqVisionModel.value.trim()
+  });
   loadAiSettings();
   els.aiStatus.textContent += " – saved ✓";
 });
 
 els.runGrade.addEventListener("click", async () => {
-  if (!Object.keys(Analyzer.parseKey(els.answerKey.value)).length) {
-    alert("Type the answer key in step 1 first.");
-    return;
-  }
   if (!els.ocrText.value.trim()) {
     alert("There is no text to mark. Read a sheet in step 3 (or type the answers in).");
     return;
   }
 
-  const { key, model } = Store.get("ai", {});
+  const { key, model } = aiSettings();
+  const hasAnswerKey = Object.keys(Analyzer.parseKey(els.answerKey.value)).length > 0;
+  if (!hasAnswerKey && !key) {
+    alert("Type the answer key in step 1, or turn on AI marking so it can work out the answers.");
+    return;
+  }
   if (!key) {
     currentResult = Analyzer.grade(els.answerKey.value, els.ocrText.value);
     els.gradeStatus.textContent = "Marked with built-in rules";
@@ -234,7 +274,11 @@ els.runGrade.addEventListener("click", async () => {
     currentResult = await AI.grade(els.answerKey.value, els.ocrText.value, key, model);
     els.gradeStatus.textContent = "Marked by AI";
   } catch (err) {
-    // If the AI is unavailable (no internet, bad key), still mark the sheet.
+    // If the AI is unavailable (no internet, bad key), still mark the sheet – if there is a key.
+    if (!hasAnswerKey) {
+      els.gradeStatus.textContent = "AI failed (" + err.message + "). Add an answer key to mark without AI.";
+      return;
+    }
     currentResult = Analyzer.grade(els.answerKey.value, els.ocrText.value);
     els.gradeStatus.textContent = "AI failed (" + err.message + "), marked with built-in rules";
   } finally {

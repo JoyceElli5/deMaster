@@ -35,7 +35,8 @@ const Analyzer = {
     const marker = /(?:^|\s)(?:q(?:uestion)?\.?\s*)?([0-9lI|]{1,3})\s*[.):\-](?!\d)\s*/gi;
 
     for (const rawLine of text.split("\n")) {
-      const line = rawLine.trim();
+      // Drop crossed-out words, written as ~~like this~~.
+      const line = rawLine.replace(/~~.*?~~/g, " ").trim();
       if (!line) continue;
 
       const found = [...line.matchAll(marker)]
