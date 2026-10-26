@@ -30,14 +30,42 @@ const Analyzer = {
 
   // Finds every "number + answer" on the sheet, even when several are on one
   // line, e.g. "1. B   2. C   3) A".
+  // On sheets with printed questions ("1. Who was the first President?") the
+  // student's answer is on the line below, so that line is used instead.
   parseSheet(text) {
     const answers = {};
     const marker = /(?:^|\s)(?:q(?:uestion)?\.?\s*)?([0-9lI|]{1,3})\s*[.):\-](?!\d)\s*/gi;
+    let waitingFor = null; // question number whose answer should be on the next line
+    const startsWithNumber = line => /^(?:q(?:uestion)?\.?\s*)?\d{1,3}\s*[.):\-]\s*\S/i.test(line);
+    // A number then a long sentence, even with the dot lost: "5 What do we call a person who…"
+    const startsLikeQuestion = line => /^(?:q(?:uestion)?\.?\s*)?\d{1,3}\s+\S+(\s+\S+){3,}/i.test(line);
 
-    for (const rawLine of text.split("\n")) {
+    const lines = text.split("\n")
       // Drop crossed-out words, written as ~~like this~~.
-      const line = rawLine.replace(/~~.*?~~/g, " ").trim();
-      if (!line) continue;
+      .map(line => line.replace(/~~.*?~~/g, " "))
+      // Ruled lines on the paper often come out as dashes, quotes or underscores at the ends.
+      .map(line => line.replace(/^[\s\-–—_~"“”'‘’`.,:;|]+(?=\S)/, "").replace(/[\s\-–—_~]+$/, "").trim())
+      .filter(line => line && !/^---\s*page/i.test(line) && /[\p{L}\p{N}]/u.test(line));
+
+    for (const [index, line] of lines.entries()) {
+
+      // The line after a printed question is the student's answer.
+      if (waitingFor !== null) {
+        if (!startsWithNumber(line) && !startsLikeQuestion(line)) {
+          answers[waitingFor] ??= line;
+          waitingFor = null;
+          continue;
+        }
+        waitingFor = null;
+      }
+
+      // (The dot after the number is often lost when reading a photo: "1 Who was…".)
+      const question = line.match(/^(?:q(?:uestion)?\.?\s*)?(\d{1,3})(?:\s*[.):\-]\s*|\s+)(.+)$/i);
+      const next = lines[index + 1];
+      if (question && this.looksLikeQuestion(question[2], next !== undefined && !startsWithNumber(next))) {
+        waitingFor = parseInt(question[1], 10);
+        continue;
+      }
 
       const found = [...line.matchAll(marker)]
         .map(m => ({ num: this.fixNumber(m[1]), start: m.index, end: m.index + m[0].length }))
@@ -59,6 +87,15 @@ const Analyzer = {
       });
     }
     return answers;
+  },
+
+  // "Who was the first President of Ghana?", "15 × 4 = ?", "Water turns to ____. (2 marks)",
+  // or any longer sentence with an un-numbered line (the answer) under it.
+  looksLikeQuestion(text, answerLineBelow) {
+    const t = text.trim();
+    if (t.length <= 12) return false;
+    if (/[?:=]\s*\??\s*$/.test(t) || /_{3,}/.test(t) || /\(\s*\d+\s*marks?\s*\)\s*$/i.test(t)) return true;
+    return answerLineBelow && t.split(/\s+/).length >= 4;
   },
 
   // OCR often reads "1" as "l", "I" or "|". Turn those back into numbers.

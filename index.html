@@ -2,137 +2,168 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#002366">
+  <meta name="description" content="Photograph a student's exam sheet and get it read and marked.">
   <title>deMaster – Exam Marker</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23002366'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11.5' stroke='white' stroke-width='3.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css">
-  <!-- Tesseract.js does the Optical Character Recognition (reading text from a photo) -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 </head>
 <body>
-  <header class="topbar">
-    <h1>deMaster</h1>
-    <p>Snap an exam sheet. Read it. Mark it.</p>
+  <header class="appbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32"><path d="M9 16.5l4.5 4.5L23 11.5"/></svg>
+      </span>
+      <span class="brand-name">deMaster</span>
+    </div>
+    <button id="ai-pill" class="pill" type="button">Checking AI…</button>
+    <button id="open-settings" class="icon-btn" type="button" aria-label="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
   </header>
 
   <main>
-    <!-- STEP 1: ANSWER KEY -->
-    <section class="card" id="key-section">
-      <h2><span class="step">1</span> Answer key</h2>
-      <p class="hint">
-        Optional when AI is on – the AI can work out the answers from the questions on the sheet.
-        One answer per line, like <code>1. B</code> or <code>3. photosynthesis</code>.
-        Add marks in brackets, e.g. <code>5. Accra [2]</code> (default is 1 mark).
-        If more than one answer is accepted, separate them with <code>|</code>, e.g. <code>6. half | 0.5</code>.
-      </p>
+    <!-- Shown when the school server wants an access code -->
+    <form id="code-banner" class="banner" hidden>
+      <p><strong>Turn on AI reading.</strong> Enter the school access code. You only need to do this once on this phone.</p>
+      <div class="inline-field">
+        <input id="banner-code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Access code" aria-label="Access code">
+        <button class="btn primary" type="submit">Turn on</button>
+      </div>
+      <p id="banner-error" class="error" hidden></p>
+    </form>
+
+    <!-- THE EXAM -->
+    <section class="card" id="exam-card">
+      <div class="card-head">
+        <h2>Exam</h2>
+        <span id="key-summary" class="muted"></span>
+      </div>
       <label for="exam-title">Exam title</label>
       <input id="exam-title" type="text" placeholder="e.g. JHS 2 Science – Mid-term">
-      <label for="answer-key">Answers</label>
-      <textarea id="answer-key" rows="8" placeholder="1. B&#10;2. D&#10;3. photosynthesis&#10;4. 12&#10;5. Accra [2]"></textarea>
-      <div class="row">
-        <button id="save-key" class="btn">Save key</button>
-        <span id="key-status" class="muted"></span>
-      </div>
+
+      <details id="key-details" class="fold">
+        <summary>Answer key <span class="muted">(optional)</span></summary>
+        <p class="hint">
+          Leave it empty and the AI works out the answers from the questions on the sheet.
+          One answer per line: <code>1. B</code>, <code>3. photosynthesis</code>.
+          Marks go in brackets: <code>5. Accra [2]</code>.
+          More than one right answer: <code>6. half | 0.5</code>.
+        </p>
+        <textarea id="answer-key" rows="7" placeholder="1. B&#10;2. carbon dioxide&#10;3. 60&#10;4. Accra [2]"></textarea>
+      </details>
     </section>
 
-    <!-- STEP 2: PHOTO CAPTURE -->
-    <section class="card" id="capture-section">
-      <h2><span class="step">2</span> Capture the sheet</h2>
-      <label for="student-name">Student name</label>
-      <input id="student-name" type="text" placeholder="e.g. Ama Mensah">
+    <!-- MARKING A SHEET -->
+    <section class="card" id="mark-card">
+      <h2>Mark a sheet</h2>
 
-      <div class="camera-box">
-        <video id="video" autoplay playsinline muted></video>
-        <canvas id="photo" hidden></canvas>
-        <div id="camera-placeholder" class="placeholder">Camera is off</div>
-      </div>
+      <ul id="pages" class="pages" aria-label="Pages of this sheet"></ul>
 
-      <div class="row wrap">
-        <button id="start-camera" class="btn">Start camera</button>
-        <button id="snap" class="btn primary" disabled>Take photo</button>
-        <button id="retake" class="btn" hidden>Retake</button>
-        <label class="btn file-btn">
-          Upload photo
-          <input id="upload" type="file" accept="image/*" capture="environment" hidden>
+      <div class="capture">
+        <label class="btn primary big" id="take-label">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <span id="take-text">Take photo of sheet</span>
+          <input id="take-photo" type="file" accept="image/*" capture="environment" hidden>
+        </label>
+        <label class="btn big">
+          Choose from gallery
+          <input id="pick-photo" type="file" accept="image/*" multiple hidden>
         </label>
       </div>
+      <p class="hint">Lay the page flat in good light and fill the screen with it. For a sheet with more than one page, add each page.</p>
+
+      <label for="student-name">Student name <span class="muted">(filled in from the sheet)</span></label>
+      <input id="student-name" type="text" placeholder="e.g. Ama Mensah" autocomplete="off">
+
+      <button id="run" class="btn primary big wide" type="button" disabled>Read &amp; mark</button>
+
+      <div id="status" class="status" hidden aria-live="polite">
+        <span class="spinner" aria-hidden="true"></span>
+        <span id="status-text"></span>
+        <div class="progress"><div id="progress-bar"></div></div>
+      </div>
+      <p id="notice" class="notice" hidden></p>
     </section>
 
-    <!-- STEP 3: OCR -->
-    <section class="card" id="ocr-section">
-      <h2><span class="step">3</span> Read the text (OCR)</h2>
-      <button id="run-ocr" class="btn primary" disabled>Read sheet</button>
-      <div class="progress" hidden><div id="progress-bar"></div></div>
-      <p id="ocr-status" class="muted"></p>
-      <label for="ocr-text">Text found on the sheet <span class="muted">(fix any mistakes before marking)</span></label>
-      <textarea id="ocr-text" rows="8" placeholder="The text read from the photo will appear here…"></textarea>
-    </section>
-
-    <!-- STEP 4: ANALYZE & GRADE -->
-    <section class="card" id="grade-section">
-      <h2><span class="step">4</span> Mark &amp; grade</h2>
-
-      <details id="ai-settings">
-        <summary>AI marking settings (Groq)</summary>
-        <p class="hint">
-          With a Groq API key, AI reads the photo (including handwriting) and marks each answer.
-          Without one, the app reads with Tesseract and marks with its built-in rules.
-          The key is saved on this device only.
-        </p>
-        <label for="groq-key">Groq API key</label>
-        <input id="groq-key" type="password" placeholder="gsk_…" autocomplete="off">
-        <label for="groq-model">Marking model</label>
-        <input id="groq-model" type="text" placeholder="openai/gpt-oss-120b">
-        <label for="groq-vision-model">Reading model <span class="muted">(must understand images)</span></label>
-        <input id="groq-vision-model" type="text" placeholder="qwen/qwen3.8-27b">
-        <div class="row">
-          <button id="save-ai" class="btn">Save</button>
-          <span id="ai-status" class="muted"></span>
+    <!-- THE RESULT -->
+    <section class="card" id="result-card" hidden>
+      <div class="score-box">
+        <div>
+          <div class="score" id="score"></div>
+          <div class="muted" id="result-name"></div>
         </div>
+        <div class="grade-badge" id="grade"></div>
+      </div>
+      <p id="result-summary" class="hint"></p>
+
+      <ol id="result-list" class="questions"></ol>
+
+      <details id="text-details" class="fold">
+        <summary>Text read from the sheet</summary>
+        <p class="hint">If something was read wrongly, fix it here and mark again.</p>
+        <textarea id="sheet-text" rows="10"></textarea>
+        <button id="remark" class="btn" type="button">Mark again</button>
       </details>
 
-      <div class="row">
-        <button id="run-grade" class="btn primary">Mark sheet</button>
-        <span id="grade-status" class="muted"></span>
-      </div>
-
-      <div id="result" hidden>
-        <div class="score-box">
-          <div>
-            <div class="score" id="score"></div>
-            <div class="muted" id="percent"></div>
-          </div>
-          <div class="grade-badge" id="grade"></div>
-        </div>
-        <p class="hint">Tap a result to change it if the app got it wrong.</p>
-        <table>
-          <thead><tr><th>Q</th><th>Student</th><th class="answer-col">Correct</th><th>Marks</th><th>Result</th></tr></thead>
-          <tbody id="result-rows"></tbody>
-        </table>
-        <div class="row">
-          <button id="save-result" class="btn">Save to records</button>
-        </div>
+      <div class="actions">
+        <button id="save-next" class="btn primary big wide" type="button">Save &amp; mark next student</button>
+        <button id="discard" class="btn wide" type="button">Discard this result</button>
       </div>
     </section>
 
     <!-- RECORDS -->
-    <section class="card" id="records-section">
-      <h2>Records</h2>
-      <table>
-        <thead><tr><th>Student</th><th>Exam</th><th>Score</th><th>Grade</th><th></th></tr></thead>
-        <tbody id="record-rows"></tbody>
-      </table>
+    <section class="card" id="records-card">
+      <div class="card-head">
+        <h2>Saved results</h2>
+        <span id="records-summary" class="muted"></span>
+      </div>
+      <ul id="record-list" class="records"></ul>
       <div class="row">
-        <button id="export-csv" class="btn">Download CSV</button>
-        <button id="clear-records" class="btn danger">Clear all</button>
+        <button id="export-csv" class="btn" type="button">Download CSV</button>
+        <button id="clear-records" class="btn danger" type="button">Clear all</button>
       </div>
     </section>
   </main>
 
-  <!-- Optional local settings (your Groq key). Not in git – see js/config.example.js -->
+  <!-- SETTINGS -->
+  <dialog id="settings">
+    <form method="dialog" id="settings-form">
+      <h2>Settings</h2>
+      <p id="settings-status" class="hint"></p>
+
+      <label for="set-code">School access code</label>
+      <input id="set-code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="From the school">
+
+      <details class="fold" id="own-key">
+        <summary>Use your own Groq key instead</summary>
+        <p class="hint">
+          Only if this copy of the app has no school AI set up. Get a key at
+          <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>.
+          It is saved on this device only.
+        </p>
+        <label for="set-key">Groq API key</label>
+        <input id="set-key" type="password" autocomplete="off" placeholder="gsk_…">
+        <label for="set-reading">Reading model <span class="muted">(must understand images)</span></label>
+        <input id="set-reading" type="text" autocomplete="off" spellcheck="false">
+        <label for="set-marking">Marking model</label>
+        <input id="set-marking" type="text" autocomplete="off" spellcheck="false">
+      </details>
+
+      <div class="row end">
+        <button class="btn" value="cancel" type="submit">Close</button>
+        <button class="btn primary" value="save" type="submit" id="save-settings">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Optional local settings (git-ignored). The page works without it. -->
   <script src="js/config.local.js" onerror="this.remove()"></script>
-  <script src="js/camera.js"></script>
-  <script src="js/ocr.js"></script>
+  <script src="js/groq.js"></script>
   <script src="js/analyzer.js"></script>
+  <script src="js/photo.js"></script>
+  <script src="js/ocr.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/app.js"></script>
 </body>

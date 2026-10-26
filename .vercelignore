@@ -1,0 +1,6 @@
+# Never upload local secrets or tooling to Vercel
+js/config.local.js
+.env*
+.DS_Store
+*.pem
+README.md
